@@ -1,3 +1,7 @@
+// cl_wieferich.h
+
+#define SPECIAL_THRESHOLD_MAX 2000000000U
+
 typedef struct {
 	int32_t fermat_pass;
 	int32_t quot;
@@ -20,6 +24,7 @@ typedef struct {
 	__uint128_t pmin, pmax, p;
 	uint64_t primecount, resultcount, last_trickle, state_sum, sieved;
 	cl_uint96_t checksum;
+	uint32_t threshold;
 } workStatus;
 
 typedef struct {

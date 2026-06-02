@@ -17,6 +17,7 @@
 #include "gmpwin.h"
 #else
 #include "/home/bryan/paribuild/include/pari/pari.h"
+//#include "/home/bryan/pari-2.17.3/src/headers/pari.h"
 #include "gmp.h"
 #endif
 
@@ -44,29 +45,7 @@
 #define BITMAP_WORDS 4096
 #define BITMAP_BITS (BITMAP_WORDS * 32)
 #define BITMAP_RANGE (BITMAP_BITS * 2)
-#define SPECIAL_THRESHOLD 2000000000U
 #define GPU_WORK_MULTIPLIER 12
-
-static void print_u128(__uint128_t x)
-{
-	char buf[40];   // enough for 128-bit decimal
-	int i = sizeof(buf);
-
-	buf[--i] = '\0';
-
-	if (x == 0) {
-		putchar('0');
-		return;
-	}
-
-	while (x > 0) {
-		buf[--i] = '0' + (x % 10);
-		x /= 10;
-	}
-
-	fputs(&buf[i], stdout);
-	printf("\n");
-}
 
 void handle_trickle_up(workStatus & st){
 	if(boinc_is_standalone()) return;
@@ -204,7 +183,7 @@ void write_state( workStatus & st, searchData & sd ){
 	FILE * out;
 
 	st.state_sum = st.pmin+st.pmax+st.p+st.primecount+st.resultcount+st.last_trickle
-		+st.sieved+st.checksum.lo+st.checksum.mid+st.checksum.hi;
+		+st.sieved+st.checksum.lo+st.checksum.mid+st.checksum.hi+st.threshold;
 
 	if (sd.write_state_a_next){
 		if ((out = my_fopen(STATE_FILENAME_A,"wb")) == NULL)
@@ -255,7 +234,7 @@ int read_state( workStatus & st, searchData & sd ){
 		}
 		else{
 			uint64_t state_sum = stat_a.pmin+stat_a.pmax+stat_a.p+stat_a.primecount+stat_a.resultcount+stat_a.last_trickle
-				+stat_a.sieved+stat_a.checksum.lo+stat_a.checksum.mid+stat_a.checksum.hi;
+				+stat_a.sieved+stat_a.checksum.lo+stat_a.checksum.mid+stat_a.checksum.hi+stat_a.threshold;
 			if(state_sum != stat_a.state_sum){
 				fprintf(stderr,"Checksum error in %s !!!\n",STATE_FILENAME_A);
 				printf("Checksum error in %s !!!\n",STATE_FILENAME_A);
@@ -282,7 +261,7 @@ int read_state( workStatus & st, searchData & sd ){
 		}
 		else{
 			uint64_t state_sum = stat_b.pmin+stat_b.pmax+stat_b.p+stat_b.primecount+stat_b.resultcount+stat_b.last_trickle
-				+stat_b.sieved+stat_b.checksum.lo+stat_b.checksum.mid+stat_b.checksum.hi;
+				+stat_b.sieved+stat_b.checksum.lo+stat_b.checksum.mid+stat_b.checksum.hi+stat_b.threshold;
 			if(state_sum != stat_b.state_sum){
 				fprintf(stderr,"Checksum error in %s !!!\n",STATE_FILENAME_B);
 				printf("Checksum error in %s !!!\n",STATE_FILENAME_B);
@@ -323,12 +302,6 @@ int read_state( workStatus & st, searchData & sd ){
 
 	// If we got here, neither state file was good
 	return 0;
-}
-
-void checkpoint( workStatus & st, searchData & sd ){
-	handle_trickle_up( st );
-	write_state( st, sd );
-	boinc_checkpoint_completed();
 }
 
 // sleep CPU thread while waiting on the specified event to complete in the command queue
@@ -472,34 +445,7 @@ static void mpz_set_uint128(mpz_t z, __uint128_t x)
     mpz_add_ui(z, z, lo_lo);        // lowest 32 bits
 }
 
-static void fprint_uint128(FILE *out, __uint128_t x)
-{
-	char buf[64];
-	int i = 63;
-
-	buf[i] = '\0';
-
-	if(x == 0)
-	{
-		fprintf(out, "0");
-		return;
-	}
-
-	while(x != 0 && i > 0)
-	{
-		buf[--i] = (char)('0' + (x % 10));
-		x /= 10;
-	}
-
-	fprintf(out, "%s", &buf[i]);
-}
-
-static void print_uint128(__uint128_t x)
-{
-	fprint_uint128(stdout, x);
-}
-
-void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out)
+void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out, uint32_t SPECIAL_THRESHOLD)
 {
 	mpz_t P;
 	mpz_t P2;
@@ -642,9 +588,9 @@ static inline cl_uint96_t u128_to_u96_wrap(const __uint128_t x)
 {
 	cl_uint96_t r;
 
-	r.lo  = (cl_uint)x;
-	r.mid = (cl_uint)(x >> 32);
-	r.hi  = (cl_uint)(x >> 64);
+	r.lo  = (uint32_t)x;
+	r.mid = (uint32_t)(x >> 32);
+	r.hi  = (uint32_t)(x >> 64);
 
 	return r;
 }
@@ -657,7 +603,7 @@ static inline cl_uint96_t add96_carry(const cl_uint96_t a, const cl_uint96_t b, 
 		a and b are 96-bit, so s < 2^97.
 		The carry out of bit 95 is therefore only 0 or 1.
 	*/
-	*carry = (cl_uint)(s >> 96);
+	*carry = (uint32_t)(s >> 96);
 
 	return u128_to_u96_wrap(s);
 }
@@ -669,18 +615,38 @@ static inline cl_uint96_t add96_wrap(const cl_uint96_t a, const cl_uint96_t b)
 	return u128_to_u96_wrap(s);
 }
 
-int factorcompare(const void *a, const void *b) {
-	result *resA = (result *)a;
-	result *resB = (result *)b;
+int resultcompare(const void *a, const void *b)
+{
+	const result *resA = (const result *)a;
+	const result *resB = (const result *)b;
 
-	__uint128_t pa = ((__uint128_t)resA->hi  << 64) | ((__uint128_t)resA->mid << 32) | (__uint128_t)resA->lo;
-	__uint128_t pb = ((__uint128_t)resB->hi  << 64) | ((__uint128_t)resB->mid << 32) | (__uint128_t)resB->lo;
+	const cl_uint96_t xa = {
+		.lo  = resA->lo,
+		.mid = resA->mid,
+		.hi  = resA->hi
+	};
 
-	if(pb < pa){
+	const cl_uint96_t xb = {
+		.lo  = resB->lo,
+		.mid = resB->mid,
+		.hi  = resB->hi
+	};
+
+	const __uint128_t pa = u96_to_u128(xa);
+	const __uint128_t pb = u96_to_u128(xb);
+
+	if(pa > pb)
 		return 1;
-	}
+	if(pa < pb)
+		return -1;
 
-	return -1;
+	return 0;
+}
+
+void checkpoint( workStatus & st, searchData & sd ){
+	handle_trickle_up( st );
+	write_state( st, sd );
+	boinc_checkpoint_completed();
 }
 
 void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardware ){
@@ -735,12 +701,12 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 			exit(EXIT_FAILURE);
 		}
 
-		// copy factors to host memory, blocking
+		// copy results to host memory, blocking
 		sclRead(hardware, resultcount * sizeof(result), pd.d_result, h_result);
 
-		// sort factors by prime size if needed
+		// sort results by prime size if needed
 		if(resultcount > 1){
-			qsort(h_result, resultcount, sizeof(result), factorcompare);
+			qsort(h_result, resultcount, sizeof(result), resultcompare);
 		}
 
 		if(boinc_is_standalone()) printf("Verifying %u results on CPU...\n", resultcount);
@@ -752,7 +718,7 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 			int special = h_result[i].special;
 			
 			wieferich_cpu_result_t r;
-			gmp_wieferich_fermat128(p, &r);
+			gmp_wieferich_fermat128(p, &r, st.threshold);
 
 			char buf[64];
 			if(!r.fermat_pass || r.quot != special){
@@ -801,6 +767,8 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 
 void setupSearch(workStatus & st, searchData & sd){
 
+	char buf[64];
+
 	if(!st.pmin || !st.pmax){
 		printf("\n-p and -P arguments are required\nuse -h for help\n");
 		fprintf(stderr, "-p and -P arguments are required\n");
@@ -813,22 +781,21 @@ void setupSearch(workStatus & st, searchData & sd){
 		exit(EXIT_FAILURE);
 	}
 
+	if(st.pmin <= UINT64_MAX){
+		st.threshold = 10000;
+	}
+
 	st.p = st.pmin;
 
 	if(boinc_is_standalone()){
-		printf("Start p: ");
-		print_uint128(st.pmin);
-		printf("\n");
-		printf("  End P: ");
-		print_uint128(st.pmax);
-		printf("\n");
+		printf("Start p: %s\n", uint128_to_str(st.pmin,buf) );
+		printf("  End P: %s\n", uint128_to_str(st.pmax,buf) );
+		printf("Using near-Wieferich threshold of %u\n", st.threshold );
 	}
 
-	fprintf(stderr, "Start p: ");
-	fprint_uint128(stderr, st.pmin);
-	fprintf(stderr, "\n  End P: ");
-	fprint_uint128(stderr, st.pmax);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "Start p: %s\n", uint128_to_str(st.pmin,buf) );
+	fprintf(stderr, "  End P: %s\n", uint128_to_str(st.pmax,buf) );
+	fprintf(stderr, "Using near-Wieferich threshold of %u\n", st.threshold );
 }
 
 
@@ -854,8 +821,8 @@ void finalizeResults( workStatus & st, searchData & sd ){
 		fclose(resfile);
 
 		if(lc < st.resultcount){
-			fprintf(stderr,"ERROR: Missing factors in %s !!!\n",sd.result_file);
-			printf("ERROR: Missing factors in %s !!!\n",sd.result_file);
+			fprintf(stderr,"ERROR: Missing results in %s !!!\n",sd.result_file);
+			printf("ERROR: Missing results in %s !!!\n",sd.result_file);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -869,13 +836,13 @@ void finalizeResults( workStatus & st, searchData & sd ){
 	}
 
 	if(st.resultcount){
-		if( fprintf( resfile, "%08" PRIx32 "%016" PRIx64 "\n", (uint32_t)st.checksum.hi, (uint64_t)st.checksum.lo) < 0){
+		if( fprintf( resfile, "%08x%08x%08x\n", st.checksum.hi, st.checksum.mid, st.checksum.lo) < 0){
 			fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
 			exit(EXIT_FAILURE);
 		}
 	}
 	else{
-		if( fprintf( resfile, "no results\n%08" PRIx32 "%016" PRIx64 "\n", (uint32_t)st.checksum.hi, (uint64_t)st.checksum.lo) < 0){
+		if( fprintf( resfile, "no results\n%08x%08x%08x\n", st.checksum.hi, st.checksum.mid, st.checksum.lo) < 0){
 			fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
 			exit(EXIT_FAILURE);
 		}
@@ -975,7 +942,7 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 	pd.clearresult = sclGetCLSoftwareWithCommon(common_cl, clearresult_cl,"clearresult",hardware, NULL);
 	// bake constants into kernel source
 	char cldef[256];
-	snprintf(cldef, sizeof(cldef), "-DBITMAP_WORDS=%d -DSPECIAL_THRESHOLD=%uU", BITMAP_WORDS, SPECIAL_THRESHOLD);
+	snprintf(cldef, sizeof(cldef), "-DBITMAP_WORDS=%d -DSPECIAL_THRESHOLD=%uU", BITMAP_WORDS, st.threshold);
 	pd.wieferich = sclGetCLSoftwareWithCommon(common_cl, wieferich_cl,"wieferich",hardware, cldef);
 	pd.getsegprimes = sclGetCLSoftwareWithCommon(common_cl, getsegprimes_cl,"getsegprimes",hardware, cldef);
 
@@ -1000,9 +967,8 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 		// Resume from checkpoint if there is one
 		if( read_state( st, sd ) ){
 			if(boinc_is_standalone()){
-				printf("Resuming from checkpoint. Current p: ");
-				print_uint128(st.p);
-				printf("\n");
+				char buf[64];
+				printf("Resuming from checkpoint. Current p: %s\n", uint128_to_str(st.p, buf) );
 			}
 			fprintf(stderr,"Resuming from checkpoint\n");
 
@@ -1103,10 +1069,7 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 		if((st.p & 1) == 0) st.p++;
 
 		__uint128_t stop = st.p + sd.range;
-		if(stop > st.pmax || stop < st.p){
-			// ck overflow
-			stop = st.pmax;
-		}
+		if(stop > st.pmax) stop = st.pmax;
 
 		cl_uint96_t kernel_start = u128_to_u96_wrap(st.p);
 		cl_uint96_t kernel_stop = u128_to_u96_wrap(stop);
@@ -1167,9 +1130,8 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 			ckpt_last = time_curr;
 			sclEnqueueKernel(hardware, pd.clearresult);
 			if(boinc_is_standalone()){
-				printf("Checkpoint, current p: ");
-				print_u128(st.p);
-				printf("\n");
+				char buf[64];
+				printf("Checkpoint, current p: %s\n", uint128_to_str(st.p, buf) );
 			}
 		}
 
@@ -1189,10 +1151,8 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 	if(boinc_is_standalone()){
 		time(&totalf);
 		printf("Search finished in %d sec.\n", (int)totalf - (int)totals);
-		printf("results %" PRIu64 ", sieved %" PRIu64 ", prime count %" PRIu64 ", checksum "
-			, st.resultcount, st.sieved, st.primecount);
-		printf("%08" PRIx32 "%016" PRIx64, (uint32_t)st.checksum.hi, (uint64_t)st.checksum.lo);
-		printf("\n");
+		printf("results %" PRIu64 ", sieved %" PRIu64 ", prime count %" PRIu64 ", checksum %08x%08x%08x\n",
+			st.resultcount, st.sieved, st.primecount, st.checksum.hi, st.checksum.mid, st.checksum.lo); 
 	}
 
 	// cleanup

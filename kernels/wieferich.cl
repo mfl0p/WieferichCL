@@ -50,6 +50,7 @@ __kernel __attribute__ ((reqd_work_group_size(256, 1, 1))) void wieferich(__glob
 				const cl_uint96_t p_minus_threshold = sub96_wrap(p, threshold);
 				const cl_uint96_t quotient = mont_get_modp96(quotient_mont, p, q);
 				sum[lid] = quotient;
+
 				if(le96(quotient, threshold)){
 					int xr = small96_to_int(quotient);
 					uint i = atomic_inc(&g_primecount[2]);
@@ -77,8 +78,7 @@ __kernel __attribute__ ((reqd_work_group_size(256, 1, 1))) void wieferich(__glob
 	}
 
 	if(!lid){
-		cl_uint96_t cksum = add96_wrap(g_cksum[group], sum[0]);
-		g_cksum[group] = cksum;
+		g_cksum[group] = add96_wrap(g_cksum[group], sum[0]);
 		uint offset = group + 1;
 		g_total_pcnt[offset] = g_total_pcnt[offset] + fermat_count; 
 	}

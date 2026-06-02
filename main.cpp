@@ -22,11 +22,13 @@ void help()
 {
 	printf("Welcome to WieferichCL, an OpenCL Wieferich prime finder.\n");
 	printf("Program usage:\n");
-	printf("-p #			Starting prime p\n");
-	printf("-P #			End prime P\n");
-	printf("			P range is 3 <= -p < -P < 2^96, [-p, -P) exclusive\n");
-	printf("-r filename		Override default result file and use 'filename'\n");
-	printf("-h			Print this help\n");
+	printf("-p #		Starting prime p\n");
+	printf("-P #		End prime P\n");
+	printf("		P range is 3 <= -p < -P < 2^96, [-p, -P) exclusive\n");
+	printf("-t #		Override default \"near-Wieferich\" threshold (%u) and use #\n", SPECIAL_THRESHOLD_MAX);
+	printf("		Only works when -p is greater than 2^64.  Threshold of 10000 is used when -p is below 2^64\n");
+	printf("-r filename	Override default result file and use 'filename'\n");
+	printf("-h		Print this help\n");
 	boinc_finish(EXIT_FAILURE);
 }
 
@@ -125,14 +127,16 @@ void parse_cmdline_string(const char *cmdline, workStatus *st, searchData *sd)
 			token = strtok(NULL, " \t");
 			if (token && parse_uint128(&st->pmin, token, (__uint128_t)3, maxlo) != 0) {
 				fprintf(stderr, "Invalid value for -p: %s\n", token);
-				printf("Invalid value for -p: %s\n", token);
+				printf("\nInvalid value for -p: %s\n\n", token);
+				boinc_finish(EXIT_FAILURE);
 			}
 		}
 		else if (strcmp(token, "-P") == 0) {
 			token = strtok(NULL, " \t");
 			if (token && parse_uint128(&st->pmax, token, (__uint128_t)4, maxhi) != 0) {
 				fprintf(stderr, "Invalid value for -P: %s\n", token);
-				printf("Invalid value for -P: %s\n", token);
+				printf("\nInvalid value for -P: %s\n\n", token);
+				boinc_finish(EXIT_FAILURE);
 			}
 		}
 		else if (strcmp(token, "-r") == 0) {
@@ -141,7 +145,17 @@ void parse_cmdline_string(const char *cmdline, workStatus *st, searchData *sd)
 				sd->result_file = strdup(token);  // allocate a copy
 				if (!sd->result_file) {
 					fprintf(stderr, "Failed to allocate memory for result file\n");
+					printf("\nFailed to allocate memory for result file\n\n");
+					boinc_finish(EXIT_FAILURE);
 				}
+			}
+		}
+		else if (strcmp(token, "-t") == 0) {
+			token = strtok(NULL, " \t");
+			if (token && parse_uint(&st->threshold, token, 0, SPECIAL_THRESHOLD_MAX) != 0) {
+				fprintf(stderr, "Invalid value for -t: %s\n", token);
+				printf("\nInvalid value for -t: %s\n\n", token);
+				boinc_finish(EXIT_FAILURE);
 			}
 		}
 		else if (strcmp(token, "-s") == 0) {
@@ -205,6 +219,7 @@ int main(int argc, char *argv[])
 	sd.write_state_a_next = true;
 	workStatus st = {};
 
+	st.threshold = SPECIAL_THRESHOLD_MAX;
 	sd.numresults = 1000000;
 
 	// Initialize BOINC

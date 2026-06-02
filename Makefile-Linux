@@ -1,0 +1,46 @@
+CC = g++
+LD = $(CC)
+
+.SUFFIXES:
+.SUFFIXES: .o .c .h .cl .cpp
+
+VERSION_MAJOR := 0
+VERSION_MINOR := 1
+date := $(shell date +%Y%m%d)
+
+APP = WieferichCL-linux64-v$(VERSION_MAJOR).$(VERSION_MINOR)-$(date)
+
+SRC = main.cpp cl_wieferich.cpp cl_wieferich.h simpleCL.c simpleCL.h kernels/clearresult.cl kernels/getsegprimes.cl kernels/clearn.cl kernels/wieferich.cl kernels/common.cl
+KERNEL_HEADERS = kernels/clearresult.h kernels/getsegprimes.h kernels/clearn.h kernels/wieferich.h kernels/common.h
+OBJ = main.o cl_wieferich.o simpleCL.o
+
+OCL_INC = -I /usr/local/cuda/include/CL/
+OCL_LIB = -L . -L /usr/local/cuda-10.1/targets/x86_64-linux/lib -lOpenCL
+
+BOINC_DIR = /home/bryan/boinc
+BOINC_INC = -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/api -I$(BOINC_DIR)
+BOINC_LIB = -L$(BOINC_DIR)/lib -L$(BOINC_DIR)/api -L$(BOINC_DIR) -lboinc_opencl -lboinc_api -lboinc -lpthread
+
+CFLAGS  = -I . -I kernels -O3 -m64 -Wall -DVERSION_MAJOR=\"$(VERSION_MAJOR)\" -DVERSION_MINOR=\"$(VERSION_MINOR)\"
+LDFLAGS = $(CFLAGS) -static-libgcc -static-libstdc++
+
+all : clean $(APP)
+
+$(APP) : $(OBJ)
+	$(LD) $(LDFLAGS) $^ $(OCL_LIB) $(BOINC_LIB) -o $@ libgmp.a libpari.a -ldl
+
+main.o : $(SRC)
+	$(CC) $(CFLAGS) $(OCL_INC) $(BOINC_INC) -c -o $@ main.cpp
+
+cl_wieferich.o : $(SRC) $(KERNEL_HEADERS)
+	$(CC) $(CFLAGS) $(OCL_INC) $(BOINC_INC) -c -o $@ cl_wieferich.cpp
+
+simpleCL.o : $(SRC)
+	$(CC) $(CFLAGS) $(OCL_INC) $(BOINC_INC) -c -o $@ simpleCL.c
+
+.cl.h:
+	./cltoh.pl $< > $@
+
+clean :
+	rm -f *.o kernels/*.h $(APP)
+

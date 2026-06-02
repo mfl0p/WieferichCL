@@ -7,6 +7,7 @@
 	CL_TARGET_OPENCL_VERSION 110 in simpleCL.h
 
 	Search limits:  3 <= P < 2^96
+	
 */
 
 #ifdef _WIN32
@@ -720,8 +721,6 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 
 	if(resultcount){
 
-		st.resultcount += resultcount;
-
 		// used to check array bounds.
 		// probably only works with a small overflow.
 		// large overflow will crash the program.
@@ -770,6 +769,8 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 				continue;
 			}
 
+			st.resultcount++;
+
 			// write results to file
 			if(resfile == NULL){
 				resfile = my_fopen(sd.result_file,"a");
@@ -779,7 +780,7 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 				}
 			}
 
-			if( fprintf( resfile, "%s %+d\n",uint128_to_str(p,buf),special ) < 0 ){
+			if( fprintf( resfile, "%s %d\n",uint128_to_str(p,buf),special ) < 0 ){
 				fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
 				exit(EXIT_FAILURE);
 			}

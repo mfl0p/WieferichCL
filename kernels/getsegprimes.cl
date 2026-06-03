@@ -1720,6 +1720,7 @@ __kernel void getsegprimes(const cl_uint96_t low, const cl_uint96_t high, __glob
 	__local ulong lo56,hi40;
 	__local uint pmod210,overflow;
 
+	// low must be odd
 	if(!lid){
 		uint of;
 		P = add_u32_carry(low, group * BITMAP_RANGE, &of);
@@ -1749,7 +1750,6 @@ __kernel void getsegprimes(const cl_uint96_t low, const cl_uint96_t high, __glob
 		ushort2 rp = prime_pow2_56_mod[i];
 		uint sp = (uint)rp.s0;
 		uint mp = (uint)rp.s1;
-		if(!hi40 && sp >= lo56) break;
 		uint lowmodp = (lo56 + hi40*mp) % sp;
 		/*
 			Find first bitmap bit j where:
@@ -1766,6 +1766,25 @@ __kernel void getsegprimes(const cl_uint96_t low, const cl_uint96_t high, __glob
 			bit = (neg_lowmodp + sp) / 2
 		*/
 		uint bit = (neg_lowmodp + ((neg_lowmodp & 1u) ? sp : 0u)) >> 1;
+
+		/*
+			For small ranges, do not mark sp itself.
+			Start crossing off sp at sp*sp instead.
+			This keeps primes such as 11 and 13 in the bitmap,
+			but still removes composites such as 121, 143, 169, etc.
+		*/
+		if(!hi40){
+			uint sp2 = (uint)sp * (uint)sp;
+			if(sp2 >= lo56){
+				uint bit_sp2 = (uint)((sp2 - lo56) >> 1);
+				if(bit < bit_sp2){
+					uint delta = bit_sp2 - bit;
+					uint steps = (delta + sp - 1u) / sp;
+					bit += steps * sp;
+				}
+			}
+		}
+
 		if(bit < BITMAP_BITS){
 			uint cur_word = bit >> 5;
 			uint word_mask = 0;

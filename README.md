@@ -24,7 +24,7 @@ A BOINC enabled OpenCL Wieferich Prime search program.
 command line options
 * -p #			Start p
 * -P #			End P
-* 			P range is 3 <= -p < -P < 2^96, [-p, -P) exclusive.
+* 			P range is 9 <= -p < -P < 2^96, [-p, -P) exclusive.
 * -t #			Override default "near-Wieferich" threshold and use #.
 			Only works when -p is greater than 2^64.  Threshold of 10000 is used when -p is below 2^64.
 * -r filename		Override default result file (results-WW.txt) and use specified file name.

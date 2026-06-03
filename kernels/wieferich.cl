@@ -46,7 +46,7 @@ __kernel __attribute__ ((reqd_work_group_size(256, 1, 1))) void wieferich(__glob
 				g_result[i] = ro;
 			}
 			else{
-				const cl_uint96_t threshold = make96((ulong)SPECIAL_THRESHOLD, 0U);
+				const cl_uint96_t threshold = make96_3(SPECIAL_THRESHOLD, 0U, 0U);
 				const cl_uint96_t p_minus_threshold = sub96_wrap(p, threshold);
 				const cl_uint96_t quotient = mont_get_modp96(quotient_mont, p, q);
 				sum[lid] = quotient;

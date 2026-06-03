@@ -41,11 +41,6 @@ inline cl_uint96_t make96_3(const uint lo, const uint mid, const uint hi)
 	return r;
 }
 
-inline cl_uint96_t make96(const ulong lo64, const uint hi)
-{
-	return make96_3((uint)lo64, (uint)(lo64 >> 32), hi);
-}
-
 inline cl_uint96_t zero96(void) { return make96_3(0U, 0U, 0U); }
 inline cl_uint96_t one96(void)  { return make96_3(1U, 0U, 0U); }
 
@@ -277,10 +272,12 @@ inline cl_uint96_t add_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const c
 	return r;
 }
 
+/* Requires 0 <= x < p and y < p. */
 inline cl_uint96_t add_u32_mod96(const cl_uint96_t x, const uint y, const cl_uint96_t p)
 {
-	cl_uint96_t r = add_u32_wrap(x, y);
-	if (ge96(r, p)) r = sub96_wrap(r, p);
+	uint carry;
+	cl_uint96_t r = add_u32_carry(x, y, &carry);
+	if(carry || ge96(r, p))	r = sub96_wrap(r, p);
 	return r;
 }
 
@@ -843,7 +840,7 @@ inline m2p96_t m2p_get96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t
 	const cl_uint96_t tp = add96_carry(x.r1, u0, &tp_carry);
 
 	const cl_uint96_t up0 = mul_lo96(q, tp);
-	const cl_uint96_t t1p = make96((ulong)tp_carry, 0U);
+	const cl_uint96_t t1p = make96_3(tp_carry, 0U, 0U);
 	const cl_uint96_t v1p = mul_wide96(p, up0).hi;
 
 	uint c;
@@ -896,6 +893,7 @@ inline int small96_to_int(const cl_uint96_t x)
 /* 2^e mod p^2 in Montgomery/p-radix form */
 inline m2p96_t pow2_m2p96(const cl_uint96_t e, const m2p96_t one, const cl_uint96_t p, const cl_uint96_t q)
 {
+	// e must be greater than 2
 	int bit = msb_index96(e) - 1;
 
 	m2p96_t a = m2p_dup96(one, p);

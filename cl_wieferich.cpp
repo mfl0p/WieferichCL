@@ -6,7 +6,7 @@
 	Required minimum OpenCL version is 1.1
 	CL_TARGET_OPENCL_VERSION 110 in simpleCL.h
 
-	Search limits:  3 <= P < 2^96
+	Search limits:  9 <= P < 2^96
 	
 */
 

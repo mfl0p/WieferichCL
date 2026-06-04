@@ -26,7 +26,7 @@ command line options
 * -P #			End P
 * 			P range is 11 <= -p < -P < 2^96, [-p, -P) exclusive.
 * -t #			Override default "near-Wieferich" threshold and use #.
-			Only works when -p is greater than 2^64.  Threshold of 10000 is used when -p is below 2^64.
+			Threshold is limited to <= 10000 when -p is below 2^64.
 * -r filename		Override default result file (results-WW.txt) and use specified file name.
 * -h			Print help
 

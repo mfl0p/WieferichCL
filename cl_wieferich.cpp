@@ -145,7 +145,7 @@ void print_progress(workStatus &st,
 	for(int i = 0; i < bar_width; i++)
 		putchar(i < pos ? '#' : '-');
 
-	printf("] %6.2f%% | %s | ETA %s",
+	printf("] %6.2f%% | %s | ETA %s\r",
 		progress * 100.0,
 		rate_str,
 		eta_str);
@@ -227,7 +227,7 @@ int read_state( workStatus & st, searchData & sd ){
 			printf("Cannot parse %s !!!\n",STATE_FILENAME_A);
 			good_state_a = false;
 		}
-		else if(stat_a.pmin != st.pmin || stat_a.pmax != st.pmax){
+		else if(stat_a.pmin != st.pmin || stat_a.pmax != st.pmax || stat_a.threshold != st.threshold){
 			fprintf(stderr,"Invalid checkpoint file %s !!!\n",STATE_FILENAME_A);
 			printf("Invalid checkpoint file %s !!!\n",STATE_FILENAME_A);
 			good_state_a = false;
@@ -254,7 +254,7 @@ int read_state( workStatus & st, searchData & sd ){
 			printf("Cannot parse %s !!!\n",STATE_FILENAME_B);
 			good_state_b = false;
 		}
-		else if(stat_b.pmin != st.pmin || stat_b.pmax != st.pmax){
+		else if(stat_b.pmin != st.pmin || stat_b.pmax != st.pmax || stat_b.threshold != st.threshold){
 			fprintf(stderr,"Invalid checkpoint file %s !!!\n",STATE_FILENAME_B);
 			printf("Invalid checkpoint file %s !!!\n",STATE_FILENAME_B);
 			good_state_b = false;
@@ -425,24 +425,17 @@ void sleepCPU(sclHard hardware){
 
 static void mpz_set_uint128(mpz_t z, __uint128_t x)
 {
-    uint64_t lo64 = (uint64_t)x;
-    uint64_t hi64 = (uint64_t)(x >> 64);
+	const uint64_t words[2] = {
+		(uint64_t)x,
+		(uint64_t)(x >> 64)
+	};
 
-    // Split lower 64 bits into two 32-bit halves
-    unsigned long lo_lo = (unsigned long)(lo64 & 0xFFFFFFFF);
-    unsigned long lo_hi = (unsigned long)(lo64 >> 32);
+	/*
+		Import 2 words, least-significant word first.
 
-    // Split upper 64 bits into two 32-bit halves
-    unsigned long hi_lo = (unsigned long)(hi64 & 0xFFFFFFFF);
-    unsigned long hi_hi = (unsigned long)(hi64 >> 32);
-
-    mpz_set_ui(z, hi_hi);           // topmost 32 bits
-    mpz_mul_2exp(z, z, 32);
-    mpz_add_ui(z, z, hi_lo);        // next 32 bits
-    mpz_mul_2exp(z, z, 32);
-    mpz_add_ui(z, z, lo_hi);        // next 32 bits
-    mpz_mul_2exp(z, z, 32);
-    mpz_add_ui(z, z, lo_lo);        // lowest 32 bits
+		z = words[0] + words[1] * 2^64
+	*/
+	mpz_import(z, 2, -1, sizeof(words[0]), 0, 0, words);
 }
 
 void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out, uint32_t SPECIAL_THRESHOLD)
@@ -455,10 +448,10 @@ void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out, uint32_
 	mpz_t R1;
 	mpz_t TWO;
 	mpz_t threshold;
-	mpz_t p_minus_threshold;
 	mpz_t delta;
+	mpz_t half_q;
 
-	mpz_inits(P, P2, E, SP, R0, R1, TWO,threshold, p_minus_threshold, delta, NULL);
+	mpz_inits(P, P2, E, SP, R0, R1, TWO, threshold, delta, half_q, NULL);
 
 	mpz_set_uint128(P, p);
 
@@ -471,16 +464,21 @@ void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out, uint32_
 	mpz_set_ui(TWO, 2);
 
 	/*
-	SP = 2^(p - 1) mod p^2
-		*/
+		SP = 2^(p - 1) mod p^2
+	*/
 	mpz_powm(SP, TWO, E, P2);
 
 	/*
-	SP = R0 + p * R1
+		SP = R0 + p * R1
 
-	R0 is the ordinary mod-p Fermat residue.
-	R1 is the Fermat / Wieferich quotient modulo p.
-		*/
+		If Fermat passes, R0 == 1, so:
+
+			SP = 1 + p * R1
+
+		and R1 is the ordinary full-exponent Fermat quotient:
+
+			R1 = (2^(p - 1) - 1) / p mod p
+	*/
 	mpz_fdiv_qr(R1, R0, SP, P);
 
 	memset(out, 0, sizeof(*out));
@@ -488,39 +486,74 @@ void gmp_wieferich_fermat128(__uint128_t p, wieferich_cpu_result_t *out, uint32_
 	out->fermat_pass = (mpz_cmp_ui(R0, 1) == 0);
 
 	/*
-	Match the OpenCL result-array behavior:
+		Euler sign for the half exponent:
 
-	if Fermat passes and sp.r1 == 0:
-	quot = 0
+			2^((p - 1) / 2) == +1 mod p  if p = 1 or 7 mod 8
+			2^((p - 1) / 2) == -1 mod p  if p = 3 or 5 mod 8
+	*/
+	const uint32_t pmod8 = (uint32_t)(p & 7);
+	const int euler_sign = ((pmod8 == 3U) || (pmod8 == 5U)) ? -1 : 1;
 
-	else if sp.r1 <= SPECIAL_THRESHOLD:
-	quot = sp.r1
+	out->euler_sign = euler_sign;
 
-	else if sp.r1 >= p - SPECIAL_THRESHOLD:
-	quot = -(p - sp.r1)
-		*/
 	if(out->fermat_pass)
 	{
 		mpz_set_ui(threshold, SPECIAL_THRESHOLD);
-		mpz_sub(p_minus_threshold, P, threshold);
 
-		if(mpz_cmp_ui(R1, 0) == 0)
+		/*
+			Derive the half-exponent quotient from the full Fermat quotient.
+
+			Full quotient:
+				q = R1
+
+			Half quotient:
+				t = euler_sign * q / 2 mod p
+
+			This must use modular halving:
+
+				if q is even: q / 2
+				if q is odd:  (q + p) / 2
+		*/
+		mpz_set(half_q, R1);
+
+		if(mpz_tstbit(half_q, 0))
+			mpz_add(half_q, half_q, P);
+
+		mpz_fdiv_q_2exp(half_q, half_q, 1);
+
+		if(euler_sign < 0 && mpz_cmp_ui(half_q, 0) != 0)
+			mpz_sub(half_q, P, half_q);
+
+		/*
+			Match the OpenCL result-array behavior:
+
+			Check both signed interpretations:
+
+				+half_q
+				-(p - half_q)
+
+			If both pass the threshold, store the smaller absolute value.
+			On an exact tie, keep the positive representation.
+		*/
+		mpz_sub(delta, P, half_q);
+
+		const int positive_pass = (mpz_cmp(half_q, threshold) <= 0);
+		const int negative_pass = (mpz_cmp(delta, threshold) <= 0);
+
+		if(positive_pass || negative_pass)
 		{
-			out->quot = 0;
-		}
-		else if(mpz_cmp(R1, threshold) <= 0)
-		{
-			out->quot = (int)mpz_get_ui(R1);
-		}
-		else if(mpz_cmp(R1, p_minus_threshold) >= 0)
-		{
-			mpz_sub(delta, P, R1);
-			out->quot = -(int)mpz_get_ui(delta);
+			if(negative_pass && (!positive_pass || mpz_cmp(delta, half_q) < 0))
+			{
+				out->quot = -(int)mpz_get_ui(delta);
+			}
+			else
+			{
+				out->quot = (int)mpz_get_ui(half_q);
+			}
 		}
 	}
 
-	mpz_clears(P, P2, E, SP, R0, R1, TWO, threshold, p_minus_threshold, delta, NULL);
-
+	mpz_clears(P, P2, E, SP, R0, R1, TWO, threshold, delta, half_q, NULL);
 }
 
 static const char *uint128_to_str(__uint128_t x, char buf[64])
@@ -544,24 +577,20 @@ static const char *uint128_to_str(__uint128_t x, char buf[64])
 	return &buf[i];
 }
 
-
 static GEN uint128_to_pari(__uint128_t x)
 {
-	/*
-	Build:
-	(((w3 << 32) + w2) << 32 + w1) << 32 + w0
+#if defined(__cplusplus)
+	static_assert(sizeof(ulong) == sizeof(uint64_t), "PARI ulong is not 64-bit on this build");
+#else
+	_Static_assert(sizeof(ulong) == sizeof(uint64_t), "PARI ulong is not 64-bit on this build");
+#endif
 
-	This avoids relying on unsigned long being 64-bit.
-		*/
-	uint32_t w0 = (uint32_t)(x);
-	uint32_t w1 = (uint32_t)(x >> 32);
-	uint32_t w2 = (uint32_t)(x >> 64);
-	uint32_t w3 = (uint32_t)(x >> 96);
+	const uint64_t lo = (uint64_t)x;
+	const uint64_t hi = (uint64_t)(x >> 64);
 
-	GEN n = utoi((ulong)w3);
-	n = addii(shifti(n, 32), utoi((ulong)w2));
-	n = addii(shifti(n, 32), utoi((ulong)w1));
-	n = addii(shifti(n, 32), utoi((ulong)w0));
+	// Build: hi * 2^64 + lo as a PARI integer.
+	GEN n = utoi((ulong)hi);
+	n = addii(shifti(n, 64), utoi((ulong)lo));
 
 	return n;
 }
@@ -652,7 +681,7 @@ void checkpoint( workStatus & st, searchData & sd ){
 void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardware ){
 
 	if(boinc_is_standalone()){
-		printf("\r                                                                                \r");
+		printf("\r                                                                                             \r");
 		fflush(stdout);
 	}
 
@@ -715,17 +744,18 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 		for(uint32_t i=0; i<resultcount; ++i){
 
 			__uint128_t p = ((__uint128_t)h_result[i].hi  << 64) | ((__uint128_t)h_result[i].mid << 32) | (__uint128_t)h_result[i].lo;
-			int special = h_result[i].special;
+			int32_t euler = h_result[i].euler;
+			int32_t special = h_result[i].special;
 			
 			wieferich_cpu_result_t r;
 			gmp_wieferich_fermat128(p, &r, st.threshold);
 
 			char buf[64];
-			if(!r.fermat_pass || r.quot != special){
-				printf("Error: GPU calculated invalid result: p %s quot %d\n", uint128_to_str(p,buf),special);
-				printf("CPU calculated: fermat_pass %d quot %d\n", r.fermat_pass, r.quot);
-				fprintf(stderr,"Error: GPU calculated invalid result: p %s quot %d\n", uint128_to_str(p,buf),special);
-				fprintf(stderr,"CPU calculated: fermat_pass %d quot %d\n", r.fermat_pass, r.quot);
+			if(!r.fermat_pass || r.quot != special || r.euler_sign != euler){
+				printf("Error: GPU calculated invalid result: p %s euler %d quot %d\n", uint128_to_str(p,buf), euler, special);
+				printf("CPU calculated: fermat_pass %d euler %d quot %d\n", r.fermat_pass, r.euler_sign, r.quot);
+				fprintf(stderr, "Error: GPU calculated invalid result: p %s euler %d quot %d\n", uint128_to_str(p,buf), euler, special);
+				fprintf(stderr, "CPU calculated: fermat_pass %d euler %d quot %d\n", r.fermat_pass, r.euler_sign, r.quot);
 				exit(EXIT_FAILURE);
 			}
 
@@ -746,9 +776,17 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 				}
 			}
 
-			if( fprintf( resfile, "%s %d\n",uint128_to_str(p,buf),special ) < 0 ){
-				fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
-				exit(EXIT_FAILURE);
+			if(!special){
+				if( fprintf( resfile, "%s is a Wieferich prime\n", uint128_to_str(p,buf) ) < 0 ){
+					fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
+					exit(EXIT_FAILURE);
+				}
+			}
+			else{
+				if( fprintf( resfile, "%s is a Wieferich special instance (%+d %+d p)\n", uint128_to_str(p,buf), euler, special ) < 0 ){
+					fprintf(stderr,"Cannot write to %s !!!\n",sd.result_file);
+					exit(EXIT_FAILURE);
+				}
 			}
 		}
 
@@ -761,7 +799,7 @@ void getResults( progData & pd, workStatus & st, searchData & sd, sclHard hardwa
 		if(boinc_is_standalone()) printf("Verified %u results.\n", resultcount);
 	}
 
-	checkpoint(st, sd);
+	checkpoint( st, sd );
 }
 
 
@@ -781,7 +819,7 @@ void setupSearch(workStatus & st, searchData & sd){
 		exit(EXIT_FAILURE);
 	}
 
-	if(st.pmin <= UINT64_MAX){
+	if(st.pmin <= UINT64_MAX && st.threshold > 10000){
 		st.threshold = 10000;
 	}
 

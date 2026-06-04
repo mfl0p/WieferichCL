@@ -13,6 +13,7 @@ typedef struct {
 	uint lo;
 	uint mid;
 	uint hi;
+	int euler;
 	int special;
 } result;
 
@@ -883,6 +884,29 @@ static inline cl_uint96_t shr1_96(const cl_uint96_t x)
 	r.mid = (x.mid >> 1) | ((x.hi & 1U) << 31);
 	r.hi = x.hi >> 1;
 	return r;
+}
+
+static inline cl_uint96_t shr1_96_carry(const cl_uint96_t x, const uint carry)
+{
+	cl_uint96_t r;
+	r.lo = (x.lo >> 1) | (x.mid << 31);
+	r.mid = (x.mid >> 1) | ((x.hi & 1U) << 31);
+	r.hi = (x.hi >> 1) | ((carry & 1U) << 31);
+	return r;
+}
+
+/*
+	Return x / 2 modulo p, where 0 <= x < p and p is odd.
+	If x is odd, use (x + p) / 2 so the division is exact modulo p.
+*/
+static inline cl_uint96_t half_mod96(const cl_uint96_t x, const cl_uint96_t p)
+{
+	if ((x.lo & 1U) == 0U)
+		return shr1_96(x);
+
+	uint carry;
+	const cl_uint96_t xp = add96_carry(x, p, &carry);
+	return shr1_96_carry(xp, carry);
 }
 
 static inline int small96_to_int(const cl_uint96_t x)

@@ -1,10 +1,11 @@
 // cl_wieferich.h
 
-#define SPECIAL_THRESHOLD_MAX 2000000000U
+#define SPECIAL_THRESHOLD_MAX 1000000000U
 
 typedef struct {
 	int32_t fermat_pass;
 	int32_t quot;
+	int32_t euler_sign;
 } wieferich_cpu_result_t;
 
 typedef struct {
@@ -17,6 +18,7 @@ typedef struct {
 	uint32_t lo;
 	uint32_t mid;
 	uint32_t hi;
+	int32_t euler;
 	int32_t special;
 } result;
 

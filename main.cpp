@@ -26,7 +26,7 @@ void help()
 	printf("-P #		End prime P\n");
 	printf("		P range is 11 <= -p < -P < 2^96, [-p, -P) exclusive\n");
 	printf("-t #		Override default \"near-Wieferich\" threshold (%u) and use #\n", SPECIAL_THRESHOLD_MAX);
-	printf("		Only works when -p is greater than 2^64.  Threshold of 10000 is used when -p is below 2^64\n");
+	printf("		Threshold is limited to <= 10000 when -p is below 2^64\n");
 	printf("-r filename	Override default result file and use 'filename'\n");
 	printf("-h		Print this help\n");
 	boinc_finish(EXIT_FAILURE);

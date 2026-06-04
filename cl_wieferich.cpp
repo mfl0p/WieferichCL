@@ -6,7 +6,7 @@
 	Required minimum OpenCL version is 1.1
 	CL_TARGET_OPENCL_VERSION 110 in simpleCL.h
 
-	Search limits:  9 <= P < 2^96
+	Search limits:  11 <= P < 2^96
 	
 */
 
@@ -852,12 +852,14 @@ void finalizeResults( workStatus & st, searchData & sd ){
 }
 
 // set values that change based on gpu work size
-void resize(progData & pd, searchData & sd, sclHard hardware){
+void resize(progData & pd, workStatus & st, searchData & sd, sclHard hardware){
 
 	cl_int err = 0;
 
-	// after sieving to 2^16, 5.06133% candidates remain in range
+	// after sieving to 2^16, and range starting above 2^32, about 5.06133% candidates remain in range
+	// at low p it may be closer to 8.0%  
 	sd.psize = (uint32_t)((double)sd.range * 0.06);
+	if(st.pmin < UINT_MAX) sd.psize *= 2;
 
 	// number of gpu workgroups, used to size the checksum array on gpu
 	sd.numgroups = (sd.psize / pd.wieferich.local_size[0]) + 2;
@@ -1023,7 +1025,7 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 	// setup gpu work size
 	sd.range = (uint64_t)sd.computeunits * GPU_WORK_MULTIPLIER * BITMAP_RANGE;
 	if(sd.range > INT_MAX) sd.range = (INT_MAX / BITMAP_RANGE) * BITMAP_RANGE;
-	resize(pd, sd, hardware);
+	resize(pd, st, sd, hardware);
 
 	time(&boinc_last);
 	time(&ckpt_last);
@@ -1094,7 +1096,7 @@ void cl_wieferich( sclHard hardware, workStatus & st, searchData & sd ){
 			if(sd.range > INT_MAX) sd.range = INT_MAX;
 			if(sd.range < BITMAP_RANGE) sd.range = BITMAP_RANGE;
 			sd.range = (sd.range / BITMAP_RANGE) * BITMAP_RANGE;
-			resize(pd, sd, hardware);
+			resize(pd, st, sd, hardware);
 			fprintf(stderr,"c:%u u:%u r:%u p:%u\n", (uint32_t)sd.compute, sd.computeunits, (uint32_t)sd.range, sd.psize);
 			if(boinc_is_standalone()){
 				printf("c:%u u:%u r:%u p:%u\n", (uint32_t)sd.compute, sd.computeunits, (uint32_t)sd.range, sd.psize);

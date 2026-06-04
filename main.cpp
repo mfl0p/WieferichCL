@@ -6,7 +6,7 @@
 	Required minimum OpenCL version is 1.1
 	CL_TARGET_OPENCL_VERSION 110 in simpleCL.h
 
-	Search limits:  9 <= P < 2^96
+	Search limits:  11 <= P < 2^96
 */
 
 #include <unistd.h>
@@ -24,7 +24,7 @@ void help()
 	printf("Program usage:\n");
 	printf("-p #		Starting prime p\n");
 	printf("-P #		End prime P\n");
-	printf("		P range is 9 <= -p < -P < 2^96, [-p, -P) exclusive\n");
+	printf("		P range is 11 <= -p < -P < 2^96, [-p, -P) exclusive\n");
 	printf("-t #		Override default \"near-Wieferich\" threshold (%u) and use #\n", SPECIAL_THRESHOLD_MAX);
 	printf("		Only works when -p is greater than 2^64.  Threshold of 10000 is used when -p is below 2^64\n");
 	printf("-r filename	Override default result file and use 'filename'\n");
@@ -125,7 +125,7 @@ void parse_cmdline_string(const char *cmdline, workStatus *st, searchData *sd)
 	while (token) {
 		if (strcmp(token, "-p") == 0) {
 			token = strtok(NULL, " \t");
-			if (token && parse_uint128(&st->pmin, token, (__uint128_t)9, maxlo) != 0) {
+			if (token && parse_uint128(&st->pmin, token, (__uint128_t)11, maxlo) != 0) {
 				fprintf(stderr, "Invalid value for -p: %s\n", token);
 				printf("\nInvalid value for -p: %s\n\n", token);
 				boinc_finish(EXIT_FAILURE);
@@ -133,7 +133,7 @@ void parse_cmdline_string(const char *cmdline, workStatus *st, searchData *sd)
 		}
 		else if (strcmp(token, "-P") == 0) {
 			token = strtok(NULL, " \t");
-			if (token && parse_uint128(&st->pmax, token, (__uint128_t)11, maxhi) != 0) {
+			if (token && parse_uint128(&st->pmax, token, (__uint128_t)12, maxhi) != 0) {
 				fprintf(stderr, "Invalid value for -P: %s\n", token);
 				printf("\nInvalid value for -P: %s\n\n", token);
 				boinc_finish(EXIT_FAILURE);

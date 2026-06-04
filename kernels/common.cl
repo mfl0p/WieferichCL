@@ -32,7 +32,7 @@ typedef struct {
 	cl_uint96_t r1;
 } m2p96_t;
 
-inline cl_uint96_t make96_3(const uint lo, const uint mid, const uint hi)
+static inline cl_uint96_t make96_3(const uint lo, const uint mid, const uint hi)
 {
 	cl_uint96_t r;
 	r.lo = lo;
@@ -41,35 +41,35 @@ inline cl_uint96_t make96_3(const uint lo, const uint mid, const uint hi)
 	return r;
 }
 
-inline cl_uint96_t zero96(void) { return make96_3(0U, 0U, 0U); }
-inline cl_uint96_t one96(void)  { return make96_3(1U, 0U, 0U); }
+static inline cl_uint96_t zero96(void) { return make96_3(0U, 0U, 0U); }
+static inline cl_uint96_t one96(void)  { return make96_3(1U, 0U, 0U); }
 
-inline uint is_zero96(const cl_uint96_t a)
+static inline uint is_zero96(const cl_uint96_t a)
 {
 	return (a.lo == 0U) && (a.mid == 0U) && (a.hi == 0U);
 }
 
-inline uint eq96(const cl_uint96_t a, const cl_uint96_t b)
+static inline uint eq96(const cl_uint96_t a, const cl_uint96_t b)
 {
 	return (a.lo == b.lo) && (a.mid == b.mid) && (a.hi == b.hi);
 }
 
-inline uint lt96(const cl_uint96_t a, const cl_uint96_t b)
+static inline uint lt96(const cl_uint96_t a, const cl_uint96_t b)
 {
 	return (a.hi < b.hi) || ((a.hi == b.hi) && ((a.mid < b.mid) || ((a.mid == b.mid) && (a.lo < b.lo))));
 }
 
-inline uint ge96(const cl_uint96_t a, const cl_uint96_t b)
+static inline uint ge96(const cl_uint96_t a, const cl_uint96_t b)
 {
 	return !lt96(a, b);
 }
 
-inline uint le96(const cl_uint96_t a, const cl_uint96_t b)
+static inline uint le96(const cl_uint96_t a, const cl_uint96_t b)
 {
 	return !lt96(b, a);
 }
 
-inline cl_uint96_t add96_carry(const cl_uint96_t a, const cl_uint96_t b, __private uint *carry)
+static inline cl_uint96_t add96_carry(const cl_uint96_t a, const cl_uint96_t b, __private uint *carry)
 {
 	cl_uint96_t r;
 	uint c;
@@ -128,13 +128,13 @@ inline cl_uint96_t add96_carry(const cl_uint96_t a, const cl_uint96_t b, __priva
 	return r;
 }
 
-inline cl_uint96_t add96_wrap(const cl_uint96_t a, const cl_uint96_t b)
+static inline cl_uint96_t add96_wrap(const cl_uint96_t a, const cl_uint96_t b)
 {
 	uint c;
 	return add96_carry(a, b, &c);
 }
 
-inline cl_uint96_t add_u32_carry(const cl_uint96_t a, const uint b, __private uint *carry)
+static inline cl_uint96_t add_u32_carry(const cl_uint96_t a, const uint b, __private uint *carry)
 {
 	cl_uint96_t r;
 	uint c;
@@ -179,13 +179,13 @@ inline cl_uint96_t add_u32_carry(const cl_uint96_t a, const uint b, __private ui
 	return r;
 }
 
-inline cl_uint96_t add_u32_wrap(const cl_uint96_t a, const uint b)
+static inline cl_uint96_t add_u32_wrap(const cl_uint96_t a, const uint b)
 {
 	uint c;
 	return add_u32_carry(a, b, &c);
 }
 
-inline cl_uint96_t sub96_borrow(const cl_uint96_t a, const cl_uint96_t b, __private uint *borrow)
+static inline cl_uint96_t sub96_borrow(const cl_uint96_t a, const cl_uint96_t b, __private uint *borrow)
 {
 	cl_uint96_t r;
 	uint br;
@@ -245,14 +245,14 @@ inline cl_uint96_t sub96_borrow(const cl_uint96_t a, const cl_uint96_t b, __priv
 	return r;
 }
 
-inline cl_uint96_t sub96_wrap(const cl_uint96_t a, const cl_uint96_t b)
+static inline cl_uint96_t sub96_wrap(const cl_uint96_t a, const cl_uint96_t b)
 {
 	uint borrow;
 	return sub96_borrow(a, b, &borrow);
 }
 
 /* r = x + y (mod p), where 0 <= x,y < p */
-inline cl_uint96_t add_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
+static inline cl_uint96_t add_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
 {
 	const cl_uint96_t pmy = sub96_wrap(p, y);
 	const uint reduce = ge96(x, pmy);
@@ -262,7 +262,7 @@ inline cl_uint96_t add_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_
 }
 
 /* r = x + y (mod p), carry is the p-radix carry from x+y */
-inline cl_uint96_t add_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, __private uint *carry)
+static inline cl_uint96_t add_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, __private uint *carry)
 {
 	const cl_uint96_t pmy = sub96_wrap(p, y);
 	const uint reduce = ge96(x, pmy);
@@ -273,7 +273,7 @@ inline cl_uint96_t add_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const c
 }
 
 /* Requires 0 <= x < p and y < p. */
-inline cl_uint96_t add_u32_mod96(const cl_uint96_t x, const uint y, const cl_uint96_t p)
+static inline cl_uint96_t add_u32_mod96(const cl_uint96_t x, const uint y, const cl_uint96_t p)
 {
 	uint carry;
 	cl_uint96_t r = add_u32_carry(x, y, &carry);
@@ -282,7 +282,7 @@ inline cl_uint96_t add_u32_mod96(const cl_uint96_t x, const uint y, const cl_uin
 }
 
 /* r = x - y (mod p), where 0 <= x,y < p */
-inline cl_uint96_t sub_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
+static inline cl_uint96_t sub_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
 {
 	uint borrow;
 	cl_uint96_t r = sub96_borrow(x, y, &borrow);
@@ -291,7 +291,7 @@ inline cl_uint96_t sub_mod96(const cl_uint96_t x, const cl_uint96_t y, const cl_
 }
 
 /* r = x - y (mod p), borrow is the p-radix borrow from x-y */
-inline cl_uint96_t sub_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, __private uint *carry)
+static inline cl_uint96_t sub_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, __private uint *carry)
 {
 	uint borrow;
 	cl_uint96_t r = sub96_borrow(x, y, &borrow);
@@ -301,18 +301,18 @@ inline cl_uint96_t sub_mod_c96(const cl_uint96_t x, const cl_uint96_t y, const c
 }
 
 /* Allows y == p.  Since y == p is zero modulo p, x - y == x. */
-inline cl_uint96_t sub_mod96_y_le_p(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
+static inline cl_uint96_t sub_mod96_y_le_p(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p)
 {
 	if (eq96(y, p)) return x;
 	return sub_mod96(x, y, p);
 }
 
-inline cl_uint96_t add_u32_allow_p(const cl_uint96_t x, const uint y)
+static inline cl_uint96_t add_u32_allow_p(const cl_uint96_t x, const uint y)
 {
 	return add_u32_wrap(x, y);
 }
 
-inline cl_uint192_t add192_carry(const cl_uint192_t a, const cl_uint192_t b, __private uint *carry)
+static inline cl_uint192_t add192_carry(const cl_uint192_t a, const cl_uint192_t b, __private uint *carry)
 {
 	cl_uint192_t r;
 	uint c;
@@ -382,13 +382,13 @@ inline cl_uint192_t add192_carry(const cl_uint192_t a, const cl_uint192_t b, __p
 	return r;
 }
 
-inline cl_uint192_t add192_wrap(const cl_uint192_t a, const cl_uint192_t b)
+static inline cl_uint192_t add192_wrap(const cl_uint192_t a, const cl_uint192_t b)
 {
 	uint c;
 	return add192_carry(a, b, &c);
 }
 
-inline cl_uint192_t wide_from_low96(const cl_uint96_t lo)
+static inline cl_uint192_t wide_from_low96(const cl_uint96_t lo)
 {
 	cl_uint192_t r;
 	r.lo = lo;
@@ -396,7 +396,7 @@ inline cl_uint192_t wide_from_low96(const cl_uint96_t lo)
 	return r;
 }
 
-inline cl_uint96_t mul_lo96(
+static inline cl_uint96_t mul_lo96(
 	const cl_uint96_t a,
 	const cl_uint96_t b)
 {
@@ -519,7 +519,7 @@ inline cl_uint96_t mul_lo96(
 	return r;
 }
 
-inline cl_uint192_t mul_wide96(
+static inline cl_uint192_t mul_wide96(
 	const cl_uint96_t a,
 	const cl_uint96_t b)
 {
@@ -714,7 +714,7 @@ inline cl_uint192_t mul_wide96(
 /*
 	r0 + p*r1 = 2 * (x0 + p*x1) mod p^2, with 0 <= r0,r1 < p.
 */
-inline m2p96_t m2p_dup96(const m2p96_t x, const cl_uint96_t p)
+static inline m2p96_t m2p_dup96(const m2p96_t x, const cl_uint96_t p)
 {
 	m2p96_t r;
 	uint c;
@@ -731,7 +731,7 @@ inline m2p96_t m2p_dup96(const m2p96_t x, const cl_uint96_t p)
 
 	This avoids 96-bit division in the kernel.  
 */
-inline m2p96_t m2p_one96(const cl_uint96_t p)
+static inline m2p96_t m2p_one96(const cl_uint96_t p)
 {
 	m2p96_t x;
 
@@ -771,7 +771,7 @@ inline m2p96_t m2p_one96(const cl_uint96_t p)
 	r0 + p*r1 = x*y*R^(-1) mod p^2, with 0 <= x,y < p.
 	This is the special x1 = y1 = 0 path from the original kernel.
 */
-inline m2p96_t m2p_mul_s96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, const cl_uint96_t q)
+static inline m2p96_t m2p_mul_s96(const cl_uint96_t x, const cl_uint96_t y, const cl_uint96_t p, const cl_uint96_t q)
 {
 	const cl_uint192_t t = mul_wide96(x, y);
 	const cl_uint96_t u0 = mul_lo96(q, t.lo);
@@ -796,7 +796,7 @@ inline m2p96_t m2p_mul_s96(const cl_uint96_t x, const cl_uint96_t y, const cl_ui
 /*
 	r0 + p*r1 = (x0 + p*x1)^2 * R^(-1) mod p^2, with 0 <= x0,x1 < p.
 */
-inline m2p96_t m2p_square96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t q)
+static inline m2p96_t m2p_square96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t q)
 {
 	const cl_uint192_t t = mul_wide96(x.r0, x.r0);
 	const cl_uint96_t u0 = mul_lo96(q, t.lo);
@@ -831,7 +831,7 @@ inline m2p96_t m2p_square96(const m2p96_t x, const cl_uint96_t p, const cl_uint9
 }
 
 /* Convert a Montgomery residue modulo p^2 back to the integer residue. */
-inline m2p96_t m2p_get96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t q)
+static inline m2p96_t m2p_get96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t q)
 {
 	const cl_uint96_t u0 = mul_lo96(q, x.r0);
 	const cl_uint96_t v1 = mul_wide96(p, u0).hi;
@@ -854,7 +854,7 @@ inline m2p96_t m2p_get96(const m2p96_t x, const cl_uint96_t p, const cl_uint96_t
 	return z;
 }
 
-inline int msb_index96(const cl_uint96_t x)
+static inline int msb_index96(const cl_uint96_t x)
 {
 	if (x.hi != 0U)
 		return 64 + 31 - (int)clz(x.hi);
@@ -865,7 +865,7 @@ inline int msb_index96(const cl_uint96_t x)
 	return 31 - (int)clz(x.lo);
 }
 
-inline uint bit_test96(const cl_uint96_t x, const int bit)
+static inline uint bit_test96(const cl_uint96_t x, const int bit)
 {
 	if (bit < 32)
 		return (x.lo >> bit) & 1U;
@@ -876,7 +876,7 @@ inline uint bit_test96(const cl_uint96_t x, const int bit)
 	return (x.hi >> (bit - 64)) & 1U;
 }
 
-inline cl_uint96_t shr1_96(const cl_uint96_t x)
+static inline cl_uint96_t shr1_96(const cl_uint96_t x)
 {
 	cl_uint96_t r;
 	r.lo = (x.lo >> 1) | (x.mid << 31);
@@ -885,13 +885,13 @@ inline cl_uint96_t shr1_96(const cl_uint96_t x)
 	return r;
 }
 
-inline int small96_to_int(const cl_uint96_t x)
+static inline int small96_to_int(const cl_uint96_t x)
 {
 	return (int)x.lo;
 }
 
 /* 2^e mod p^2 in Montgomery/p-radix form */
-inline m2p96_t pow2_m2p96(const cl_uint96_t e, const m2p96_t one, const cl_uint96_t p, const cl_uint96_t q)
+static inline m2p96_t pow2_m2p96(const cl_uint96_t e, const m2p96_t one, const cl_uint96_t p, const cl_uint96_t q)
 {
 	// e must be greater than 2
 	int bit = msb_index96(e) - 1;
@@ -918,7 +918,7 @@ inline m2p96_t pow2_m2p96(const cl_uint96_t e, const m2p96_t one, const cl_uint9
 }
 
 /* Convert one Montgomery residue modulo p back to ordinary form. */
-inline cl_uint96_t mont_get_modp96(
+static inline cl_uint96_t mont_get_modp96(
 	const cl_uint96_t x,
 	const cl_uint96_t p,
 	const cl_uint96_t q)
@@ -929,7 +929,7 @@ inline cl_uint96_t mont_get_modp96(
 	return sub_mod96(zero96(), v1, p);
 }
 
-inline uint inv32_odd(const uint a)
+static inline uint inv32_odd(const uint a)
 {
 	/*
 		Inverse of odd a modulo 2^32.
@@ -956,7 +956,7 @@ inline uint inv32_odd(const uint a)
 	This replaces the 7-step 96-bit Newton loop.
 */
 
-inline cl_uint96_t mont_inv_pos96(const cl_uint96_t p)
+static inline cl_uint96_t mont_inv_pos96(const cl_uint96_t p)
 {
 	const uint p0 = p.lo;
 	const uint p1 = p.mid;
